@@ -137,7 +137,6 @@ MapCloudDisplay::MapCloudDisplay()
 	cloud_from_scan_ = new rviz::BoolProperty( "Cloud from scan", false,
 										 "Create the cloud from laser scans instead of the RGB-D/Stereo images.",
 										 this, SLOT( updateCloudParameters() ), this );
-	fromScan_ = cloud_from_scan_->getBool();
 
 	cloud_decimation_ = new rviz::IntProperty( "Cloud decimation", 4,
 										 "Decimation of the input RGB and depth images before creating the cloud.",
@@ -167,14 +166,14 @@ MapCloudDisplay::MapCloudDisplay()
 										 "Filter the floor up to maximum height set here "
 										 "(only appropriate for 2D mapping).",
 										 this, SLOT( updateCloudParameters() ), this );
-	cloud_filter_floor_height_->setMin( -999.0f );
+	cloud_filter_floor_height_->setMin( 0.0f );
 	cloud_filter_floor_height_->setMax( 999.0f );
 
 	cloud_filter_ceiling_height_ = new rviz::FloatProperty( "Filter ceiling (m)", 0.0f,
 										 "Filter the ceiling at the specified height set here "
 										 "(only appropriate for 2D mapping).",
 										 this, SLOT( updateCloudParameters() ), this );
-	cloud_filter_ceiling_height_->setMin( -999.0f );
+	cloud_filter_ceiling_height_->setMin( 0.0f );
 	cloud_filter_ceiling_height_->setMax( 999.0f );
 
 	node_filtering_radius_ = new rviz::FloatProperty( "Node filtering radius (m)", 0.0f,
@@ -282,7 +281,6 @@ void MapCloudDisplay::processMapData(const rtabmap_ros::MapData& map)
 
 	// Add new clouds...
 	bool fromDepth = !cloud_from_scan_->getBool();
-	std::set<int> nodeDataReceived;
 	for(unsigned int i=0; i<map.nodes.size() && i<map.nodes.size(); ++i)
 	{
 		int id = map.nodes[i].id;
@@ -320,13 +318,13 @@ void MapCloudDisplay::processMapData(const rtabmap_ros::MapData& map)
 						cloud = rtabmap::util3d::voxelize(cloud, validIndices, cloud_voxel_size_->getFloat());
 					}
 
-					if(cloud_filter_floor_height_->getFloat() != 0.0f || cloud_filter_ceiling_height_->getFloat() != 0.0f)
+					if(cloud_filter_floor_height_->getFloat() > 0.0f || cloud_filter_ceiling_height_->getFloat() > 0.0f)
 					{
 						// convert in /odom frame
 						cloud = rtabmap::util3d::transformPointCloud(cloud, s.getPose());
 						cloud = rtabmap::util3d::passThrough(cloud, "z",
-								cloud_filter_floor_height_->getFloat()!=0.0f?cloud_filter_floor_height_->getFloat():-999.0f,
-								cloud_filter_ceiling_height_->getFloat()!=0.0f && (cloud_filter_floor_height_->getFloat()==0.0f || cloud_filter_ceiling_height_->getFloat()>cloud_filter_floor_height_->getFloat())?cloud_filter_ceiling_height_->getFloat():999.0f);
+								cloud_filter_floor_height_->getFloat()>0.0f?cloud_filter_floor_height_->getFloat():-999.0f,
+								cloud_filter_ceiling_height_->getFloat()>0.0f && (cloud_filter_floor_height_->getFloat()<=0.0f || cloud_filter_ceiling_height_->getFloat()>cloud_filter_floor_height_->getFloat())?cloud_filter_ceiling_height_->getFloat():999.0f);
 						// convert back in /base_link frame
 						cloud = rtabmap::util3d::transformPointCloud(cloud, s.getPose().inverse());
 					}
@@ -380,7 +378,6 @@ void MapCloudDisplay::processMapData(const rtabmap_ros::MapData& map)
 				}
 			}
 		}
-		nodeDataReceived.insert(id);
 	}
 
 	// Update graph
@@ -395,7 +392,6 @@ void MapCloudDisplay::processMapData(const rtabmap_ros::MapData& map)
 		boost::mutex::scoped_lock lock(current_map_mutex_);
 		current_map_ = poses;
 		current_map_updated_ = true;
-		nodeDataReceived_.insert(nodeDataReceived.begin(), nodeDataReceived.end());
 	}
 }
 
@@ -535,14 +531,7 @@ void MapCloudDisplay::updateBillboardSize()
 
 void MapCloudDisplay::updateCloudParameters()
 {
-	// do nothing for most parameters... only take effect on next generated clouds
-
-	// if we change the kind of map, clear
-	if(fromScan_ != cloud_from_scan_->getBool())
-	{
-		reset();
-	}
-	fromScan_ = cloud_from_scan_->getBool();
+	// do nothing... only take effect on next generated clouds
 }
 
 void MapCloudDisplay::downloadMap(bool graphOnly)
@@ -741,7 +730,6 @@ void MapCloudDisplay::update( float wall_dt, float ros_dt )
 					cloudInfoIt->second->pose_ = it->second;
 					Ogre::Vector3 framePosition;
 					Ogre::Quaternion frameOrientation;
-					std::string error;
 					if (context_->getFrameManager()->getTransform(cloudInfoIt->second->message_->header, framePosition, frameOrientation))
 					{
 						// Multiply frame with pose
@@ -762,16 +750,15 @@ void MapCloudDisplay::update( float wall_dt, float ros_dt )
 						cloudInfoIt->second->scene_node_->setVisible(true);
 						++totalNodesShown;
 					}
-					else if(context_->getFrameManager()->frameHasProblems(cloudInfoIt->second->message_->header.frame_id, cloudInfoIt->second->message_->header.stamp, error))
+					else
 					{
-						ROS_ERROR("MapCloudDisplay: Could not update pose of node %d (cannot transform pose in target frame id \"%s\" (reason=%s), set fixed frame in global options to \"%s\")",
+						ROS_ERROR("MapCloudDisplay: Could not update pose of node %d (cannot transform pose in target frame id \"%s\", set fixed frame in global options to \"%s\")",
 								it->first,
 								cloudInfoIt->second->message_->header.frame_id.c_str(),
-								error.c_str(),
 								cloudInfoIt->second->message_->header.frame_id.c_str());
 					}
 				}
-				else if(it->first>0 && current_map_updated_&& nodeDataReceived_.find(it->first) == nodeDataReceived_.end())
+				else if(it->first>0 && current_map_updated_)
 				{
 					missingNodes.push_back(it->first);
 				}
@@ -829,7 +816,6 @@ void MapCloudDisplay::reset()
 		boost::mutex::scoped_lock lock(current_map_mutex_);
 		current_map_.clear();
 		current_map_updated_ = false;
-		nodeDataReceived_.clear();
 	}
 	MFDClass::reset();
 }

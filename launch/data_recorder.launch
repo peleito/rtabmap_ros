@@ -2,11 +2,11 @@
 
   <!-- arguments -->
   <arg name="subscribe_odometry"   default="false"/>
-  <arg name="subscribe_depth"      default="true"/>
+  <arg name="subscribe_depth"      default="false"/>
   <arg name="subscribe_stereo"     default="false"/>
   <arg name="subscribe_rgbd"       default="false"/>
   <arg name="subscribe_scan"       default="false"/>
-  <arg name="subscribe_scan_cloud" default="false"/>
+  <arg name="subscribe_scan_cloud" default="true"/>
   <arg     if="$(arg subscribe_stereo)" name="approx_sync"  default="false"/>
   <arg unless="$(arg subscribe_stereo)" name="approx_sync"  default="true"/>
   
@@ -30,7 +30,7 @@
   <arg name="rgbd_topic"       default="camera/rgbd_image" />
   <arg name="odom_topic"       default="odom"/>
   <arg name="scan_topic"       default="scan"/>
-  <arg name="scan_cloud_topic" default="scan_cloud"/>
+  <arg name="scan_cloud_topic" default="/os_cloud_node/points"/>
   
   <arg name="rgb_image_transport"  default="raw"/>
   <arg name="depth_image_transport"  default="raw"/>

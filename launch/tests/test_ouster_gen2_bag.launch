@@ -32,7 +32,10 @@
        
     -->
 
-    <arg name="use_sim_time"  default="false"/>
+    <node pkg="tf" type="static_transform_publisher" name="sensor_lidar" args="0 0 0 0 0 0 /os_sensor /os_lidar 100"/> 
+    <node pkg="tf" type="static_transform_publisher" name="sensor_imu" args="0 0 0 0 0 0 /os_sensor /os_imu 100"/> 
+
+    <arg name="use_sim_time"  default="true"/>
 
     <!-- Required: -->
     <arg unless="$(arg use_sim_time)" name="sensor_hostname"/>
